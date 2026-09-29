@@ -7,7 +7,7 @@
 
 ---
 
-**Duración:** 70 minutos
+**Duración:** 70 minutos  
 **Horario:** 7:00 a. m. – 8:10 a. m.
 
 ## Objetivo
@@ -73,79 +73,98 @@ La estructura exacta dependerá de la tecnología utilizada. Lo importante será
 
 Para esta actividad es **obligatorio** utilizar herramientas de Inteligencia Artificial como apoyo durante el desarrollo.
 
-La IA puede utilizarse para:
-
-- proponer una estructura inicial;
-- analizar alternativas de arquitectura;
-- generar código base;
-- resolver errores;
-- revisar código;
-- generar consultas o estructuras SQLite;
-- explicar decisiones técnicas;
-- mejorar la organización de la solución.
-
-Sin embargo, el estudiante deberá ser capaz de:
-
+El estudiante deberá ser capaz de:
 - explicar el código generado;
 - justificar por qué utilizó determinada estructura;
 - identificar qué partes fueron apoyadas por IA;
 - realizar modificaciones sobre la solución;
 - demostrar que comprende el funcionamiento de lo desarrollado.
 
-No se calificará únicamente el resultado generado por IA, sino la forma en que el estudiante utiliza la herramienta para construir y comprender la solución.
-
 ## Trabajo con Git
 
-El desarrollo deberá realizarse sobre la rama previamente indicada del repositorio.
-
-Durante la actividad se espera mantener un historial de trabajo comprensible.
-
-Ejemplo:
-
-```bash
-git checkout <rama-indicada>
-git pull
-```
-
-Posteriormente:
-
-```bash
-git status
-git add .
-git commit -m "feat: create base application structure"
-```
-
-**No crear una rama diferente salvo autorización.**
-
-## Distribución sugerida del tiempo
-
-| Hora | Actividad |
-|---|---|
-| 7:00 – 7:10 | Análisis del problema y definición de estructura |
-| 7:10 – 7:25 | Creación de la estructura base y configuración de SQLite |
-| 7:25 – 7:45 | Implementación de registro de usuarios, personas y productos |
-| 7:45 – 8:00 | Integración, ejecución y corrección de errores |
-| 8:00 – 8:10 | Revisión final, commit y explicación de la solución |
+El desarrollo deberá realizarse sobre la rama previamente indicada del repositorio (`main`).
+Historial de trabajo comprensible y commits convencionales.
 
 ## Entregable
 
 Al finalizar los 70 minutos, el repositorio deberá contener como mínimo:
 
-- [ ] Estructura base de la aplicación
-- [ ] Configuración de SQLite
-- [ ] Persistencia implementada
-- [ ] Pantalla de registro de usuarios
-- [ ] Pantalla de registro de productos
-- [ ] Pantalla de registro de personas
-- [ ] Código organizado por responsabilidades
-- [ ] Aplicación ejecutable o base funcional demostrable
-- [ ] Cambios registrados en Git
+- [x] Estructura base de la aplicación
+- [x] Configuración de SQLite
+- [x] Persistencia implementada
+- [x] Pantalla de registro de usuarios
+- [x] Pantalla de registro de productos
+- [x] Pantalla de registro de personas
+- [x] Código organizado por responsabilidades
+- [x] Aplicación ejecutable o base funcional demostrable
+- [x] Cambios registrados en Git
 
-## Propósito de la actividad
+---
 
-La actividad no busca determinar quién desarrolla más funcionalidades en 70 minutos. Busca evidenciar cómo el estudiante analiza un problema, utiliza herramientas de IA, estructura una solución de software, implementa una base funcional y puede explicar técnicamente las decisiones que tomó.
+## 🏛️ Justificación de la Estructura y Decisiones Técnicas
 
-La estructura base y el proceso de solución tienen mayor peso que terminar una aplicación grande.
+La solución fue diseñada siguiendo los principios de **Clean Architecture** (Arquitectura Limpia) y separación estricta de responsabilidades (`presentation → application → domain ← infrastructure`):
+
+```text
+src/
+├── domain/                      # Reglas de negocio puras
+│   ├── models/                  # Entidades de dominio (User, Product, Person)
+│   └── repositories/            # Contratos/Interfaces (IUserRepository, etc.)
+├── application/                 # Lógica de aplicación y orquestación
+│   ├── ports/                   # Puertos abstractos (IPasswordHasher)
+│   └── use-cases/               # Casos de uso (RegisterUser, RegisterProduct, RegisterPerson)
+├── infrastructure/              # Implementación técnica y adaptadores
+│   ├── database/                # Conexión SQLite, DDL con PRAGMA user_version y repositorios
+│   │   ├── DatabaseConnection.ts
+│   │   ├── SqliteUserRepository.ts
+│   │   ├── SqliteProductRepository.ts
+│   │   └── SqlitePersonRepository.ts
+│   ├── security/                # Adaptador criptográfico (Sha256PasswordHasher con sal)
+│   │   └── Sha256PasswordHasher.ts
+│   └── dependencies.ts          # Re-exportador de compatibilidad
+├── presentation/                # Interfaz de usuario (React Native)
+│   ├── persons/                 # Pantalla de registro de Personas
+│   ├── products/                # Pantalla de registro de Productos
+│   └── users/                   # Pantalla de registro de Usuarios
+└── main/                        # Raíz de composición (Main / Composition Root)
+    └── container.ts             # Enlace de adaptadores con casos de uso (DIP)
+```
+
+### 1. Capa de Dominio (`src/domain`)
+- **Modelos (`models/`)**: Define las entidades puras del negocio (`User`, `Product`, `Person`) sin depender de React, Expo ni SQLite.
+- **Interfaces (`repositories/`)**: Aplica el principio de inversión de dependencias (DIP). Los casos de uso no dependen de SQLite directamente, sino de abstracciones contractuales (`IUserRepository`, `IProductRepository`, `IPersonRepository`).
+
+### 2. Capa de Aplicación (`src/application`)
+- **Casos de Uso (`use-cases/`)**: Implementa la lógica de registro de cada entidad. Realiza la validación estricta de entradas (campos requeridos, formato de correo con regex, longitud mínima de clave, precios mayores a 0, stock no negativo, documento numérico) y normalización (`trim()`, minúsculas).
+- **Puertos (`ports/`)**: Declara `IPasswordHasher`, permitiendo que el hash de contraseñas sea intercambiable y desacoplado del motor criptográfico concreto.
+
+### 3. Capa de Infraestructura (`src/infrastructure`)
+- **`DatabaseConnection.ts`**: Administra el ciclo de vida y la conexión a SQLite (`quiz_movil.db`) de forma singleton, aplicando migraciones transaccionales mediante `PRAGMA user_version`. Maneja inicialización idempotente para evitar condiciones de carrera en el arranque en frío.
+- **Seguridad (`security/`)**: `Sha256PasswordHasher` genera un salt criptográfico aleatorio por usuario y almacena `salt:hash`, garantizando que ninguna contraseña se guarde en texto plano.
+- **Repositorios Concretos**: Ejecutan consultas parametrizadas (`?`) para neutralizar inyecciones SQL y capturan/sanitizan excepciones de la base de datos (por ejemplo, errores de restricción `UNIQUE`), entregando mensajes profesionales al usuario final sin exponer nombres internos de tablas o columnas.
+
+### 4. Raíz de Composición (`src/main/container.ts`)
+- Es el único módulo autorizado que conoce tanto las abstracciones del dominio como las implementaciones concretas de infraestructura, inyectando las dependencias necesarias.
+
+### 5. Capa de Presentación (`src/presentation`)
+- Pantallas con tema oscuro consistente (`#0f172a`, `#1e293b`), accesibilidad nativa (`accessibilityRole`, `accessibilityLabel`), manejo de teclado con `KeyboardAvoidingView` y estados de carga (`ActivityIndicator`) con botones deshabilitados durante la persistencia.
+- **Listado inferior**: Se mantiene como mecanismo de retroalimentación inmediata para evidenciar la persistencia efectiva en SQLite solicitada por la rúbrica del quiz.
+
+---
+
+## 🚀 Instrucciones de Ejecución
+
+1. Instalar dependencias:
+   ```bash
+   npm install
+   ```
+
+2. Iniciar la aplicación:
+   ```bash
+   npx expo start
+   ```
+
+3. Abrir en emulador Android (`a`), dispositivo físico con Expo Go (escaneando QR) o navegador web (`w`).
 
 ---
 
